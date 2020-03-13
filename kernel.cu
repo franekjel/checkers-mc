@@ -79,9 +79,9 @@ static void Expand(TreeNode* node, char* board, int player)
     if (node->position != -1)
     {
         if (player)
-            hostRules->getMovesDarkPos(board, moves, captures, (node->position) % 8, (node->position) / 8, n);
+            hostRules->getMovesDarkPos(board, moves, captures, (node->position) % N, (node->position) / N, n);
         else
-            hostRules->getMovesLightPos(board, moves, captures, (node->position) % 8, (node->position) / 8, n);
+            hostRules->getMovesLightPos(board, moves, captures, (node->position) % N, (node->position) / N, n);
     } else
     {
         if (player) //0-light 1-dark
@@ -115,9 +115,9 @@ static void Expand(TreeNode* node, char* board, int player)
             else
                 hostRules->getMovesLightPos(b, mvs, cptr, x2, y2, m);
             if (cptr > 0)
-            {
                 node->children[i]->position = N * y2 + x2;
-            }
+            else
+                node->children[i]->position = -1;
         }
     }
 }
@@ -141,7 +141,7 @@ __global__ void MCTSSimulation(char* boards, int* positions, curandState* states
     { //NOTE: magic number! - max depth of simulation
         int n = 0;
         captures = 0;
-        if (xpos > -1)
+        if (xpos != -1)
         {
             if (player)
                 deviceRules->getMovesDarkPos(board, moves, captures, xpos, ypos, n);

@@ -319,6 +319,7 @@ void findMoveGPU(char* board, int timeout, int player, RulesType rules)
     }
 
     int N = hostRules->boardSize;
+    int N2 = N * N;
 
     Player = player;
     float elapsed = 0;
@@ -342,14 +343,15 @@ void findMoveGPU(char* board, int timeout, int player, RulesType rules)
     {
         cudaMallocManaged(&tData[i].stream, sizeof(cudaStream_t));
         cudaStreamCreate(&tData[i].stream);
-        cudaMallocManaged(&tData[i].boards, BLOCK * sizeof(hostRules->boardSize));
+        cudaMallocManaged(&tData[i].boards, BLOCK * sizeof(N2));
         cudaMallocManaged(&tData[i].positions, BLOCK * sizeof(int));
         cudaMallocManaged(&tData[i].results, BLOCK * sizeof(float));
         cudaMallocManaged(&tData[i].states, BLOCK * sizeof(curandState));
         tData[i].root = root;
         tData[i].rootMutex = &rootMutex;
         tData[i].player = player;
-        memcpy(tData[i].board, board, hostRules->boardSize * sizeof(char));
+        tData[i].board = new char[N2];
+        memcpy(tData[i].board, board, N2 * sizeof(char));
         pthread_create(&threads[i], NULL, thread, (void*)&tData[i]);
     }
 

@@ -133,7 +133,7 @@ __global__ void MCTSSimulation(char* boards, int* positions, curandState* states
     //memcpy(board, boards + (N2 * idx), N2 * sizeof(char));
     int dep = 0; //depth
     float r = 0; //result
-    Move moves[deviceRules->maxMoves];
+    Move moves[48]; //TODO something, cudamalloc etc
     int captures = 0;
     int xpos = positions[idx] % N, ypos = positions[idx] / N;
     positions[idx] = -1;

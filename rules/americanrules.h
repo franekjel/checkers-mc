@@ -5,7 +5,7 @@
 class AmericanRules
 {
 public:
-    static __device__ __host__ void getMovesLightPos(char board[8][8], Move moves[48], int captures, int8_t x, int8_t y, int& n)
+    static __device__ __host__ void getMovesLightPos(char board[8][8], Move moves[48], int& captures, int8_t x, int8_t y, int& n)
     {
         if (board[x][y] == 'l' || board[x][y] == 'L')
         {
@@ -99,7 +99,7 @@ public:
         }
     }
 
-    static __device__ __host__ void getMovesDarkPos(char board[8][8], Move moves[48], int captures, int8_t x, int8_t y, int& n)
+    static __device__ __host__ void getMovesDarkPos(char board[8][8], Move moves[48], int& captures, int8_t x, int8_t y, int& n)
     {
         if (board[x][y] == 'd' || board[x][y] == 'D')
         {

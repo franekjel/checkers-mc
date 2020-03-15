@@ -337,11 +337,11 @@ void* thread(void* data)
         for (int i = 0; i < BLOCK; i++)
         {
             int r = d->results[i];
-            cur->children[d->positions[i]]->games.fetch_add(2, std::memory_order_relaxed);
+            cur->children[i % n]->games.fetch_add(2, std::memory_order_relaxed);
             if (r)
             {
                 s += r;
-                cur->children[d->positions[i]]->wins.fetch_add(r, std::memory_order_relaxed);
+                cur->children[i % n]->wins.fetch_add(r, std::memory_order_relaxed);
             }
         }
         while (cur->parent)

@@ -110,9 +110,9 @@ static void Expand(TreeNode* node, char board[TBoardSize][TBoardSize], int playe
     } else
     {
         if (player) //0-light 1-dark
-            n = genMovesDark<TRules, TBoardSize, TMaxMoves>(board, moves, &captures);
+            n = genMovesDark<TRules, TBoardSize, TMaxMoves>(board, moves, captures);
         else
-            n = genMovesLight<TRules, TBoardSize, TMaxMoves>(board, moves, &captures);
+            n = genMovesLight<TRules, TBoardSize, TMaxMoves>(board, moves, captures);
     }
     if (captures > 0)
         n = filterMoves<TMaxMoves>(moves, n);
@@ -174,9 +174,9 @@ __global__ void MCTSSimulation(char* boards, int* positions, curandState* states
         } else
         {
             if (player)
-                n = genMovesDark<TRules, TBoardSize, TMaxMoves>(board, moves, &captures);
+                n = genMovesDark<TRules, TBoardSize, TMaxMoves>(board, moves, captures);
             else
-                n = genMovesLight<TRules, TBoardSize, TMaxMoves>(board, moves, &captures);
+                n = genMovesLight<TRules, TBoardSize, TMaxMoves>(board, moves, captures);
         }
         if (n == 0)
         {

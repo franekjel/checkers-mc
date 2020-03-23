@@ -58,13 +58,13 @@ l.l.l.l.\n\
 }
 
 //very basic checking of board correctness
-void checkBoard(char* board, int n, char* argv[])
+void checkBoard(char board[8][8], char* argv[])
 {
-    for (int x = 0; x < n; x++)
+    for (int x = 0; x < 8; x++)
     {
-        for (int y = 0; y < n; y++)
+        for (int y = 0; y < 8; y++)
         {
-            if ((x + y) % 2 == 0 && board[8 * y + x] != '.')
+            if ((x + y) % 2 == 0 && board[x][y] != '.')
             {
                 printf("Piece on white square!\n");
                 usage(argv[0]);
@@ -93,17 +93,21 @@ int main(int argc, char* argv[])
             usage(argv[0]);
         }
     }
-    char board[8][8];
+    char board[64];
     int i = 0;
     while (i < 64)
     {
-        board[i / 8][i % 8] = getchar();
-        if (board[i / 8][i % 8] == '.' || board[i / 8][i % 8] == 'd' || board[i / 8][i % 8] == 'D' || board[i / 8][i % 8] == 'l' || board[i / 8][i % 8] == 'L')
+        board[i] = getchar();
+        if (board[i] == '.' || board[i] == 'd' || board[i] == 'D' || board[i] == 'l' || board[i] == 'L')
             i++;
     }
-    //checkBoard(board, n, argv);
+    char b[8][8];
+    for (int y = 0; y < 8; y++)
+        for (int x = 0; x < 8; x++)
+            b[x][y] = board[y * 8 + x];
+    checkBoard(b, argv);
 
-    findMoveGPU<AmericanRules, 8, 48>(board, timeout, player);
+    findMoveGPU<AmericanRules, 8, 48>(b, timeout, player);
 
     return 0;
 }

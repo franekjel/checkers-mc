@@ -9,17 +9,14 @@ extern "C"
 }
 
 #include "kernel.h"
+#include "rules/americanrules.h"
 #include "rules/rules.h"
 
 void handler(int sig)
 {
     void* array[10];
     size_t size;
-
-    // get void*'s for all entries on the stack
     size = backtrace(array, 10);
-
-    // print out all the frames to stderr
     fprintf(stderr, "Error: signal %d:\n", sig);
     backtrace_symbols_fd(array, size, STDERR_FILENO);
     exit(1);
@@ -97,28 +94,17 @@ int main(int argc, char* argv[])
         }
     }
     int r = 0;
-    RulesType rules;
-    switch (r)
-    {
-    default:
-        rules = AMERICAN_RULES;
-        break;
-    }
-
-    int n = 8;
-
-    char* board = new char[n * n];
+    char board[8][8];
     int i = 0;
     while (i < 64)
     {
-        board[i] = getchar();
-        if (board[i] == '.' || board[i] == 'd' || board[i] == 'D' || board[i] == 'l' || board[i] == 'L')
+        board[i / 8][i % 8] = getchar();
+        if (board[i / 8][i % 8] == '.' || board[i / 8][i % 8] == 'd' || board[i / 8][i % 8] == 'D' || board[i / 8][i % 8] == 'l' || board[i / 8][i % 8] == 'L')
             i++;
     }
-    checkBoard(board, n, argv);
+    //checkBoard(board, n, argv);
 
-    findMoveGPU(board, timeout, player, rules);
+    findMoveGPU<AmericanRules, 8, 48>(board, timeout, player);
 
-    delete[] board;
     return 0;
 }

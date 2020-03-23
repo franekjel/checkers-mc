@@ -4,8 +4,8 @@ int Player = 0;
 
 volatile sig_atomic_t running = 1;
 
-Rules* hostRules = new AmericanRules();
-__device__ Rules* deviceRules;
+//One move - from.x, from.y, to.x, to.y It have operator=
+typedef int8_t Move[4];
 
 struct TreeNode
 {
@@ -29,7 +29,7 @@ struct TreeNode
 
 struct ThreadData
 {
-    char* board;
+    char board[8][8];
     int player;
     char* boards;
     int* positions;
@@ -70,27 +70,25 @@ static int chooseNode(TreeNode* cur, TreeNode* root)
     return maxi;
 }
 
-static void Expand(TreeNode* node, char* board, int player)
+static void Expand(TreeNode* node, char board[8][8], int player)
 {
-    int N = hostRules->boardSize;
-    int N2 = N * N;
-    Move moves[hostRules->maxMoves];
+    Move moves[48];
     int captures = 0, n = 0;
     if (node->position != -1)
     {
         if (player)
-            hostRules->getMovesDarkPos(board, moves, captures, (node->position) % N, (node->position) / N, n);
+            getMovesDarkPos(board, moves, &captures, (node->position) % 8, (node->position) / 8, n);
         else
-            hostRules->getMovesLightPos(board, moves, captures, (node->position) % N, (node->position) / N, n);
+            getMovesLightPos(board, moves, &captures, (node->position) % 8, (node->position) / 8, n);
     } else
     {
         if (player) //0-light 1-dark
-            n = hostRules->genMovesDark(board, moves, captures);
+            n = genMovesDark(board, moves, &captures);
         else
-            n = hostRules->genMovesLight(board, moves, captures);
+            n = genMovesLight(board, moves, &captures);
     }
     if (captures > 0)
-        n = hostRules->filterMoves(moves, n);
+        n = filterMoves(moves, n);
     node->movesN = n;
     node->children = new TreeNode*[n];
     node->moves = new Move[n];
@@ -100,86 +98,82 @@ static void Expand(TreeNode* node, char* board, int player)
         node->children[i] = new TreeNode(node);
         if (captures > 0)
         { //if there are capturing moves all are capturing. So we check if after capture we have another possibility to capture
-            char b[N2];
-            memcpy(b, board, N2 * sizeof(char));
-            int x1 = node->moves[i][0], y1 = node->moves[i][1], x2 = node->moves[i][2], y2 = node->moves[i][3];
-            b[y2 * N + x2] = b[y1 * N + x1];
-            b[y2 * N + x2] = b[y1 * N + x1] = '.';
-            if (x1 - x2 == 2 || x1 - x2 == -2)
-                b[(y1 + y2) * (N / 2) + (x1 + x2) / 2] = '.';
+            char b[8][8];
+            memcpy(b, board, 64 * sizeof(char));
+            b[node->moves[i][2]][node->moves[i][3]] = b[node->moves[i][0]][node->moves[i][1]];
+            b[node->moves[i][0]][node->moves[i][1]] = '.';
+            b[(node->moves[i][0] + node->moves[i][2]) / 2][(node->moves[i][1] + node->moves[i][3]) / 2] = '.';
             int m = 0;
-            Move mvs[hostRules->maxMoves];
+            Move mvs[4];
             int cptr = 0;
             if (player)
-                hostRules->getMovesDarkPos(b, mvs, cptr, x2, y2, m);
+                getMovesDarkPos(b, mvs, &cptr, node->moves[i][2], node->moves[i][3], m);
             else
-                hostRules->getMovesLightPos(b, mvs, cptr, x2, y2, m);
+                getMovesLightPos(b, mvs, &cptr, node->moves[i][2], node->moves[i][3], m);
             if (cptr > 0)
-                node->children[i]->position = N * y2 + x2;
-            else
-                node->children[i]->position = -1;
+            {
+                node->children[i]->position = node->moves[i][2] + 8 * node->moves[i][3];
+            }
         }
     }
 }
 
 //simulation starts in node with children, we choose one and do random game. Then backpropagate result
-__global__ void MCTSSimulation(char* boards, int* positions, curandState* states, int player, int originalPlayer, float* results)
+//__global__ void __launch_bounds__(BLOCK) MCTSSimulation(char* boards, int* positions, curandState* states, int player, int orginalPlayer, float* results)
+__global__ void MCTSSimulation(char* boards, int* positions, curandState* states, int player, int orginalPlayer, float* results)
 {
-    int N = deviceRules->boardSize;
-    int N2 = deviceRules->boardSize * deviceRules->boardSize;
     int idx = threadIdx.x;
     curandState state = states[idx];
-    char* board = boards + (N2 * idx);
-    //memcpy(board, boards + (N2 * idx), N2 * sizeof(char));
+    char board[8][8];
+    memcpy(board, boards + (64 * idx), 64 * sizeof(char));
     int dep = 0; //depth
     float r = 0; //result
-    Move moves[48]; //TODO something, cudamalloc etc
+    Move moves[48];
     int captures = 0;
-    int xpos = positions[idx] % N, ypos = positions[idx] / N;
+    int xpos = positions[idx] % 8, ypos = positions[idx] / 8;
     positions[idx] = -1;
     while (dep < 120)
     { //NOTE: magic number! - max depth of simulation
         int n = 0;
         captures = 0;
-        if (xpos != -1)
+        if (xpos > -1)
         {
             if (player)
-                deviceRules->getMovesDarkPos(board, moves, captures, xpos, ypos, n);
+                getMovesDarkPos(board, moves, &captures, xpos, ypos, n);
             else
-                deviceRules->getMovesLightPos(board, moves, captures, xpos, ypos, n);
+                getMovesLightPos(board, moves, &captures, xpos, ypos, n);
         } else
         {
             if (player)
-                n = deviceRules->genMovesDark(board, moves, captures);
+                n = genMovesDark(board, moves, &captures);
             else
-                n = deviceRules->genMovesLight(board, moves, captures);
+                n = genMovesLight(board, moves, &captures);
         }
         if (n == 0)
         {
-            r = player ^ originalPlayer;
+            r = player ^ orginalPlayer;
             r *= 2;
             break;
         }
 
         if (captures > 0)
-            n = deviceRules->filterMoves(moves, n);
+            n = filterMoves(moves, n);
         int i = curand(&state) % n;
         if (dep == 0)
             positions[idx] = i;
-        int x1 = moves[i][0], y1 = moves[i][1], x2 = moves[i][2], y2 = moves[i][3];
-        board[y2 * N + x2] = board[y1 * N + x1];
-        board[y1 * N + x1] = '.';
-        if (x1 - x2 == 2 || x1 - x2 == -2)
+        board[moves[i][2]][moves[i][3]] = board[moves[i][0]][moves[i][1]];
+        board[moves[i][0]][moves[i][1]] = '.';
+        if (moves[i][0] - moves[i][2] == 2 || moves[i][0] - moves[i][2] == -2)
         { //capturign move
-            board[(y2 - y1) * (N / 2) + (x2 - x1) / 2] = '.';
-            xpos = x2;
-            ypos = y2;
+            board[(moves[i][2] + moves[i][0]) / 2][(moves[i][3] + moves[i][1]) / 2] = '.';
+            xpos = moves[i][2];
+            ypos = moves[i][3];
             int cptr = 0, m = 0;
             if (player)
-                deviceRules->getMovesDarkPos(board, moves, cptr, xpos, ypos, m);
+                getMovesDarkPos(board, moves, &cptr, xpos, ypos, m);
             else
-                deviceRules->getMovesLightPos(board, moves, cptr, xpos, ypos, m);
-            m = deviceRules->filterMoves(moves, m);
+                getMovesLightPos(board, moves, &cptr, xpos, ypos, m);
+            m = filterMoves(moves, m);
             if (m == 0)
             {
                 xpos = -1;
@@ -187,10 +181,10 @@ __global__ void MCTSSimulation(char* boards, int* positions, curandState* states
             }
         } else
             player = player ^ 1;
-        int c = deviceRules->checkResult(board);
+        int c = checkResult(board);
         if (c != -1)
         {
-            if (c == originalPlayer)
+            if (c == orginalPlayer)
                 r = 2;
             break;
         }
@@ -202,9 +196,8 @@ __global__ void MCTSSimulation(char* boards, int* positions, curandState* states
     results[idx] = r;
 }
 
-static TreeNode* MCTSSelectionAndExpansion(char* board, TreeNode* root, int* player)
+static TreeNode* MCTSSelectionAndExpansion(char board[8][8], TreeNode* root, int* player)
 {
-    int N = hostRules->boardSize;
     int orginalPlayer = *player;
     int N0 = 20; //NOTE: magic number! - how fast node expands
     TreeNode* cur = root;
@@ -222,17 +215,16 @@ static TreeNode* MCTSSelectionAndExpansion(char* board, TreeNode* root, int* pla
             } while (cur->parent);
             return nullptr;
         }
-        int x1 = cur->moves[i][0], y1 = cur->moves[i][1], x2 = cur->moves[i][2], y2 = cur->moves[i][3];
 
         //do move
-        board[y2 * N + x2] = board[y1 * N + x1];
-        board[y1 * N + x1] = '.';
-        if (x1 - x2 == 2 || x1 - x2 == -2) //capturign move
-            board[(y1 + y2) * (N / 2) + ((x1 + x2) / 2)] = '.'; //*(N/2) because (y1+y2)/2 * N
-        if (board[y2 * N + x2] == 'l' && y2 == 0) //light promotion
-            board[y2 * N + x2] = 'L';
-        if (board[y2 * N + x2] == 'd' && y2 == N - 1) //dark promotion
-            board[y2 * N + x2] = 'D';
+        board[cur->moves[i][2]][cur->moves[i][3]] = board[cur->moves[i][0]][cur->moves[i][1]];
+        board[cur->moves[i][0]][cur->moves[i][1]] = '.';
+        if (cur->moves[i][0] - cur->moves[i][2] == 2 || cur->moves[i][0] - cur->moves[i][2] == -2) //capturign move
+            board[(cur->moves[i][2] + cur->moves[i][0]) / 2][(cur->moves[i][3] + cur->moves[i][1]) / 2] = '.';
+        if (board[cur->moves[i][2]][cur->moves[i][3]] == 'l' && cur->moves[i][3] == 0) //light promotion
+            board[cur->moves[i][2]][cur->moves[i][3]] = 'L';
+        if (board[cur->moves[i][2]][cur->moves[i][3]] == 'd' && cur->moves[i][3] == 7) //dark promotion
+            board[cur->moves[i][2]][cur->moves[i][3]] = 'D';
 
         cur = cur->children[i];
         if (cur->position == -1)
@@ -252,17 +244,11 @@ __global__ void initCurand(curandState* states)
     curand_init(clock64(), idx, 0, &states[idx]);
 }
 
-__global__ void initAmericanRules()
-{
-    deviceRules = new AmericanRules();
-}
-
 void* thread(void* data)
 {
     ThreadData* d = (ThreadData*)data;
     TreeNode* cur = nullptr;
-    int N2 = hostRules->boardSize * hostRules->boardSize;
-    char b[N2];
+    char b[8][8];
     int p;
 
     initCurand<<<1, BLOCK, 0, d->stream>>>(d->states);
@@ -273,16 +259,16 @@ void* thread(void* data)
         cur = nullptr;
         //critical part - tree search
         pthread_mutex_lock(d->rootMutex);
-        memcpy(b, d->board, N2 * sizeof(char));
+        memcpy(b, d->board, 64 * sizeof(char));
         p = d->player;
         while (cur == nullptr || cur->movesN == 0)
             cur = MCTSSelectionAndExpansion(b, d->root, &p);
         pthread_mutex_unlock(d->rootMutex);
-        //end critical part
+        //critical part end
         int n = cur->movesN;
         for (int i = 0; i < BLOCK; i++)
         {
-            memcpy(d->boards + (i * N2 * sizeof(char)), b, N2 * sizeof(char));
+            memcpy(d->boards + (i * 64 * sizeof(char)), b, 64 * sizeof(char));
             d->positions[i] = cur->children[i % n]->position;
         }
         MCTSSimulation<<<1, BLOCK, 0, d->stream>>>(d->boards, d->positions, d->states, p, Player, d->results);
@@ -303,24 +289,15 @@ void* thread(void* data)
             cur->wins.fetch_add(s, std::memory_order_relaxed);
             cur = cur->parent;
         }
-        cur->wins.fetch_add(s, std::memory_order_relaxed);
+        cur->wins.fetch_add(s, std::memory_order_relaxed); //
+
+        //end
     }
     return NULL;
 }
 
-void findMoveGPU(char* board, int timeout, int player, RulesType rules)
+void findMoveGPU(char board[8][8], int timeout, int player)
 {
-    switch (rules)
-    {
-    case AMERICAN_RULES:
-        hostRules = new AmericanRules();
-        initAmericanRules<<<1, 1, 0>>>();
-        break;
-    }
-
-    int N = hostRules->boardSize;
-    int N2 = N * N;
-
     Player = player;
     float elapsed = 0;
     cudaEvent_t start, stop;
@@ -343,15 +320,14 @@ void findMoveGPU(char* board, int timeout, int player, RulesType rules)
     {
         cudaMallocManaged(&tData[i].stream, sizeof(cudaStream_t));
         cudaStreamCreate(&tData[i].stream);
-        cudaMallocManaged(&tData[i].boards, BLOCK * sizeof(N2));
+        cudaMallocManaged(&tData[i].boards, BLOCK * sizeof(char[8][8]));
         cudaMallocManaged(&tData[i].positions, BLOCK * sizeof(int));
         cudaMallocManaged(&tData[i].results, BLOCK * sizeof(float));
         cudaMallocManaged(&tData[i].states, BLOCK * sizeof(curandState));
         tData[i].root = root;
         tData[i].rootMutex = &rootMutex;
         tData[i].player = player;
-        tData[i].board = new char[N2];
-        memcpy(tData[i].board, board, N2 * sizeof(char));
+        memcpy(tData[i].board, board, 64 * sizeof(char));
         pthread_create(&threads[i], NULL, thread, (void*)&tData[i]);
     }
 
@@ -385,22 +361,18 @@ void findMoveGPU(char* board, int timeout, int player, RulesType rules)
     }
     int i = maxi;
     TreeNode* cur = root;
-
-    int x1 = cur->moves[i][0], y1 = cur->moves[i][1], x2 = cur->moves[i][2], y2 = cur->moves[i][3];
     do
     {
-        board[y2 * N + x2] = board[y1 + N + x1];
-        board[y1 + N + x1] = '.';
-        if (x1 - x2 == 2 || y1 - y2 == -2) //capturign move
-            board[(y1 + y2) * (N / 2) + (x1 + x2) / 2] = '.';
-        if (board[y2 * N + x2] == 'l' && y2 == 0) //light promotion
-            board[y2 * N + x2] = 'L';
-        if (board[y2 * N + x2] == 'd' && y2 == N - 1) //dark promotion
-            board[y2 * N + x2] = 'D';
+        board[cur->moves[i][2]][cur->moves[i][3]] = board[cur->moves[i][0]][cur->moves[i][1]];
+        board[cur->moves[i][0]][cur->moves[i][1]] = '.';
+        if (cur->moves[i][0] - cur->moves[i][2] == 2 || cur->moves[i][0] - cur->moves[i][2] == -2) //capturign move
+            board[(cur->moves[i][2] + cur->moves[i][0]) / 2][(cur->moves[i][3] + cur->moves[i][1]) / 2] = '.';
+        if (board[cur->moves[i][2]][cur->moves[i][3]] == 'l' && cur->moves[i][3] == 0) //light promotion
+            board[cur->moves[i][2]][cur->moves[i][3]] = 'L';
+        if (board[cur->moves[i][2]][cur->moves[i][3]] == 'd' && cur->moves[i][3] == 7) //dark promotion
+            board[cur->moves[i][2]][cur->moves[i][3]] = 'D';
         cur = cur->children[i];
     } while (cur->position != -1);
-
-    delete hostRules;
     printf("W:%d G:%d", root->wins.load(), root->games.load());
     for (int i = 0; i < THREADS; i++)
     {

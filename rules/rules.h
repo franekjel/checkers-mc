@@ -78,7 +78,7 @@ __device__ __host__ int genMovesDark(char board[TBoardSize][TBoardSize], Move mo
     {
         for (int8_t y = 0; y < TBoardSize; y++)
         {
-            Rules::getMovesDarkPos(board, moves, captures, x, y, n);
+            TRules::getMovesDarkPos(board, moves, captures, x, y, n);
         }
     }
     return n;

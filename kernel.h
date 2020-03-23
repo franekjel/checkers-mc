@@ -104,9 +104,9 @@ static void Expand(TreeNode* node, char board[TBoardSize][TBoardSize], int playe
     if (node->position != -1)
     {
         if (player)
-            TRules::getMovesDarkPos(board, moves, &captures, (node->position) % TBoardSize, (node->position) / TBoardSize, n);
+            TRules::getMovesDarkPos(board, moves, captures, (node->position) % TBoardSize, (node->position) / TBoardSize, n);
         else
-            TRules::getMovesLightPos(board, moves, &captures, (node->position) % TBoardSize, (node->position) / TBoardSize, n);
+            TRules::getMovesLightPos(board, moves, captures, (node->position) % TBoardSize, (node->position) / TBoardSize, n);
     } else
     {
         if (player) //0-light 1-dark
@@ -134,9 +134,9 @@ static void Expand(TreeNode* node, char board[TBoardSize][TBoardSize], int playe
             Move mvs[TMaxMoves];
             int cptr = 0;
             if (player)
-                TRules::getMovesDarkPos(b, mvs, &cptr, node->moves[i][2], node->moves[i][3], m);
+                TRules::getMovesDarkPos(b, mvs, cptr, node->moves[i][2], node->moves[i][3], m);
             else
-                TRules::getMovesLightPos(b, mvs, &cptr, node->moves[i][2], node->moves[i][3], m);
+                TRules::getMovesLightPos(b, mvs, cptr, node->moves[i][2], node->moves[i][3], m);
             if (cptr > 0)
             {
                 node->children[i]->position = node->moves[i][2] + TBoardSize * node->moves[i][3];
@@ -168,9 +168,9 @@ __global__ void MCTSSimulation(char* boards, int* positions, curandState* states
         if (xpos > -1)
         {
             if (player)
-                TRules::getMovesDarkPos(board, moves, &captures, xpos, ypos, n);
+                TRules::getMovesDarkPos(board, moves, captures, xpos, ypos, n);
             else
-                TRules::getMovesLightPos(board, moves, &captures, xpos, ypos, n);
+                TRules::getMovesLightPos(board, moves, captures, xpos, ypos, n);
         } else
         {
             if (player)
@@ -199,9 +199,9 @@ __global__ void MCTSSimulation(char* boards, int* positions, curandState* states
             ypos = moves[i][3];
             int cptr = 0, m = 0;
             if (player)
-                TRules::getMovesDarkPos(board, moves, &cptr, xpos, ypos, m);
+                TRules::getMovesDarkPos(board, moves, cptr, xpos, ypos, m);
             else
-                TRules::getMovesLightPos(board, moves, &cptr, xpos, ypos, m);
+                TRules::getMovesLightPos(board, moves, cptr, xpos, ypos, m);
             m = filterMoves<TMaxMoves>(moves, m);
             if (m == 0)
             {

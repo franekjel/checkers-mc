@@ -93,7 +93,6 @@ int main(int argc, char* argv[])
             usage(argv[0]);
         }
     }
-    int r = 0;
     char board[8][8];
     int i = 0;
     while (i < 64)

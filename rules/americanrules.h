@@ -5,12 +5,12 @@
 class AmericanRules
 {
 public:
-    static __device__ __host__ void getMovesLightPos(char board[8][8], Move moves[48], int* captures, int8_t x, int8_t y, int& n)
+    static __device__ __host__ void getMovesLightPos(char board[8][8], Move moves[48], int captures, int8_t x, int8_t y, int& n)
     {
         if (board[x][y] == 'l' || board[x][y] == 'L')
         {
             //men move
-            if (*captures == 0)
+            if (captures == 0)
             { //when there is capture possibility we can't do normal move
                 if (x > 0 && y > 0 && board[x - 1][y - 1] == '.')
                 {
@@ -39,7 +39,7 @@ public:
                     moves[n][2] = x - 2;
                     moves[n][3] = y - 2;
                     n++;
-                    (*captures)++;
+                    (captures)++;
                 }
                 if (x < 6 && board[x + 2][y - 2] == '.' && (board[x + 1][y - 1] == 'd' || board[x + 1][y - 1] == 'D'))
                 {
@@ -48,13 +48,13 @@ public:
                     moves[n][2] = x + 2;
                     moves[n][3] = y - 2;
                     n++;
-                    (*captures)++;
+                    (captures)++;
                 }
             }
 
             if (board[x][y] == 'L')
             { //king
-                if (*captures == 0)
+                if (captures == 0)
                 { //normal king move
                     if (x > 0 && y < 7 && board[x - 1][y + 1] == '.')
                     {
@@ -83,7 +83,7 @@ public:
                         moves[n][2] = x - 2;
                         moves[n][3] = y + 2;
                         n++;
-                        (*captures)++;
+                        (captures)++;
                     }
                     if (x < 6 && board[x + 2][y + 2] == '.' && (board[x + 1][y + 1] == 'd' || board[x + 1][y + 1] == 'D'))
                     {
@@ -92,18 +92,18 @@ public:
                         moves[n][2] = x + 2;
                         moves[n][3] = y + 2;
                         n++;
-                        (*captures)++;
+                        (captures)++;
                     }
                 }
             } //king
         }
     }
 
-    static __device__ __host__ void getMovesDarkPos(char board[8][8], Move moves[48], int* captures, int8_t x, int8_t y, int& n)
+    static __device__ __host__ void getMovesDarkPos(char board[8][8], Move moves[48], int captures, int8_t x, int8_t y, int& n)
     {
         if (board[x][y] == 'd' || board[x][y] == 'D')
         {
-            if (*captures == 0)
+            if (captures == 0)
             { //when there is capture possibility we can't do normal move
                 if (x > 0 && y < 7 && board[x - 1][y + 1] == '.')
                 {
@@ -131,7 +131,7 @@ public:
                     moves[n][2] = x - 2;
                     moves[n][3] = y + 2;
                     n++;
-                    (*captures)++;
+                    (captures)++;
                 }
                 if (x < 6 && board[x + 2][y + 2] == '.' && (board[x + 1][y + 1] == 'l' || board[x + 1][y + 1] == 'L'))
                 {
@@ -140,13 +140,13 @@ public:
                     moves[n][2] = x + 2;
                     moves[n][3] = y + 2;
                     n++;
-                    (*captures)++;
+                    (captures)++;
                 }
             }
 
             if (board[x][y] == 'D')
             { //king
-                if (*captures == 0)
+                if (captures == 0)
                 { //normal king move
                     if (x > 0 && y > 0 && board[x - 1][y - 1] == '.')
                     {
@@ -174,7 +174,7 @@ public:
                         moves[n][2] = x - 2;
                         moves[n][3] = y - 2;
                         n++;
-                        (*captures)++;
+                        (captures)++;
                     }
                     if (x < 6 && board[x + 2][y - 2] == '.' && (board[x + 1][y - 1] == 'l' || board[x + 1][y - 1] == 'L'))
                     {
@@ -183,7 +183,7 @@ public:
                         moves[n][2] = x + 2;
                         moves[n][3] = y - 2;
                         n++;
-                        (*captures)++;
+                        (captures)++;
                     }
                 }
             } //king

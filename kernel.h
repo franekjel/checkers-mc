@@ -26,6 +26,9 @@ extern "C"
 #define BLOCK 256
 
 int Player = 0;
+int device;
+
+std::atomic<int> kernels;
 
 volatile sig_atomic_t running = 1;
 
@@ -272,6 +275,7 @@ __global__ void initCurand(curandState* states)
 {
     int idx = threadIdx.x;
     curand_init(clock64(), idx, 0, &states[idx]);
+    //curand_init(idx, idx, 0, &states[idx]);
 }
 
 template <class TRules, int TBoardSize, int TMaxMoves>
@@ -286,24 +290,30 @@ void* thread(void* data)
 
     initCurand<<<1, BLOCK, 0, d->stream>>>(d->states);
     cudaStreamSynchronize(d->stream);
-
     while (running)
     {
         cur = nullptr;
+
         //critical part - tree search
         pthread_mutex_lock(d->rootMutex);
         memcpy(b, d->board, boardArea * sizeof(char));
         p = d->player;
+
         while (cur == nullptr || cur->movesN == 0)
             cur = MCTSSelectionAndExpansion<TRules, TBoardSize, TMaxMoves>(b, d->root, &p);
         pthread_mutex_unlock(d->rootMutex);
         //critical part end
+
         int n = cur->movesN;
         for (int i = 0; i < BLOCK; i++)
         {
             memcpy(d->boards + (i * boardArea * sizeof(char)), b, boardArea * sizeof(char));
             d->positions[i] = cur->children[i % n]->position;
         }
+
+        cudaMemPrefetchAsync(d->boards, BLOCK * sizeof(char[TBoardSize][TBoardSize]), device, d->stream);
+        cudaMemPrefetchAsync(d->positions, BLOCK * sizeof(int), device, d->stream);
+        cudaMemPrefetchAsync(d->results, BLOCK * sizeof(float), device, d->stream);
         MCTSSimulation<TRules, TBoardSize, TMaxMoves><<<1, BLOCK, 0, d->stream>>>(d->boards, d->positions, d->states, p, Player, d->results);
         cudaStreamSynchronize(d->stream);
         int s = 0;
@@ -322,8 +332,9 @@ void* thread(void* data)
             cur->wins.fetch_add(s, std::memory_order_relaxed);
             cur = cur->parent;
         }
-        cur->wins.fetch_add(s, std::memory_order_relaxed); //
+        cur->wins.fetch_add(s, std::memory_order_relaxed);
 
+        kernels.fetch_add(1, std::memory_order_relaxed);
         //end
     }
     return NULL;
@@ -335,6 +346,7 @@ void findMoveGPU(char board[TBoardSize][TBoardSize], int timeout, int player)
 {
     const int boardArea = TBoardSize * TBoardSize;
 
+    cudaGetDevice(&device);
     Player = player;
     float elapsed = 0;
     cudaEvent_t start, stop;
@@ -361,6 +373,7 @@ void findMoveGPU(char board[TBoardSize][TBoardSize], int timeout, int player)
         cudaMallocManaged(&tData[i].positions, BLOCK * sizeof(int));
         cudaMallocManaged(&tData[i].results, BLOCK * sizeof(float));
         cudaMallocManaged(&tData[i].states, BLOCK * sizeof(curandState));
+        cudaMemAdvise(tData[i].states, BLOCK * sizeof(curandState), cudaMemAdviseSetPreferredLocation, device);
         tData[i].root = root;
         tData[i].rootMutex = &rootMutex;
         tData[i].player = player;
@@ -410,11 +423,10 @@ void findMoveGPU(char board[TBoardSize][TBoardSize], int timeout, int player)
             board[cur->moves[i][2]][cur->moves[i][3]] = 'D';
         cur = cur->children[i];
     } while (cur->position != -1);
-    printf("W:%d G:%d", root->wins.load(), root->games.load());
+    printf("W:%d G:%d K:%d\n", root->wins.load() / 2, root->games.load() / 2, kernels.load());
     for (int i = 0; i < THREADS; i++)
     {
         cudaStreamDestroy(tData[i].stream);
-        cudaFree(&tData[i].states);
         cudaFree(&tData[i].states);
         cudaFree(&tData[i].stream);
         cudaFree(&tData[i].boards);

@@ -23,7 +23,7 @@ class Rules
 public:
     /* Generates moves for light player. Parameters:
      * board - buffer boardSize*boardSize
-     * moves - array for moves, ensure it is big enought
+     * moves - array for moves, ensure it is big enough
      * captures - number of capturing moves
      * x,y - used during captures, indicate position on pawn, which must move
      * n - position in moves[] (increments with each move)
@@ -33,7 +33,7 @@ public:
 
     /* Generates moves for dark player. Parameters:
      * board - buffer boardSize*boardSize
-     * moves - array for moves, ensure it is big enought
+     * moves - array for moves, ensure it is big enough
      * captures - number of capturing moves
      * x,y - used during captures, indicate position on pawn, which must move
      * n - position in moves[] (increments with each move)

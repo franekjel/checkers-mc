@@ -99,6 +99,23 @@ static int chooseNode(TreeNode* cur, TreeNode* root)
     return maxi;
 }
 
+static int getBestMove(TreeNode* cur)
+{
+    int max = 0;
+    int maxi = -1;
+    for (int i = 0; i < cur->movesN; i++)
+    {
+        float g = cur->children[i]->games.load();
+        float w = cur->children[i]->wins.load();
+        if (w / g > max)
+        {
+            max = w / g;
+            maxi = i;
+        }
+    }
+    return maxi;
+}
+
 template <class TRules, int TBoardSize, int TMaxMoves>
 static void Expand(TreeNode* node, char board[TBoardSize][TBoardSize], int player)
 {
@@ -395,33 +412,31 @@ void findMoveGPU(char board[TBoardSize][TBoardSize], int timeout, int player)
     for (int i = 0; i < THREADS; i++)
         pthread_join(threads[i], NULL);
 
-    //check and do best  move
-    float max = 0;
-    int maxi = 0;
-    for (int i = 0; i < root->movesN; i++)
-    {
-        float g = root->children[i]->games.load();
-        float w = root->children[i]->wins.load();
-        printf("%f\n", w / g);
-        if (w / g > max)
-        {
-            max = w / g;
-            maxi = i;
-        }
-    }
-    int i = maxi;
     TreeNode* cur = root;
+    int movesCount = 0;
     do
     {
-        board[cur->moves[i][2]][cur->moves[i][3]] = board[cur->moves[i][0]][cur->moves[i][1]];
-        board[cur->moves[i][0]][cur->moves[i][1]] = '.';
-        if (cur->moves[i][0] - cur->moves[i][2] == 2 || cur->moves[i][0] - cur->moves[i][2] == -2) //capturign move
-            board[(cur->moves[i][2] + cur->moves[i][0]) / 2][(cur->moves[i][3] + cur->moves[i][1]) / 2] = '.';
-        if (board[cur->moves[i][2]][cur->moves[i][3]] == 'l' && cur->moves[i][3] == 0) //light promotion
-            board[cur->moves[i][2]][cur->moves[i][3]] = 'L';
-        if (board[cur->moves[i][2]][cur->moves[i][3]] == 'd' && cur->moves[i][3] == TBoardSize - 1) //dark promotion
-            board[cur->moves[i][2]][cur->moves[i][3]] = 'D';
-        cur = cur->children[i];
+        int best = getBestMove(cur);
+        movesCount++;
+        cur = cur->children[best];
+    } while (cur->position != -1);
+
+    printf("%d\n", movesCount);
+
+    cur = root;
+    do
+    {
+        int best = getBestMove(cur);
+        printf("%d %d %d %d\n", cur->moves[best][0], cur->moves[best][1], cur->moves[best][2], cur->moves[best][3]);
+        board[cur->moves[best][2]][cur->moves[best][3]] = board[cur->moves[best][0]][cur->moves[best][1]];
+        board[cur->moves[best][0]][cur->moves[best][1]] = '.';
+        if (cur->moves[best][0] - cur->moves[best][2] == 2 || cur->moves[best][0] - cur->moves[best][2] == -2) //capturign move
+            board[(cur->moves[best][2] + cur->moves[best][0]) / 2][(cur->moves[best][3] + cur->moves[best][1]) / 2] = '.';
+        if (board[cur->moves[best][2]][cur->moves[best][3]] == 'l' && cur->moves[best][3] == 0) //light promotion
+            board[cur->moves[best][2]][cur->moves[best][3]] = 'L';
+        if (board[cur->moves[best][2]][cur->moves[best][3]] == 'd' && cur->moves[best][3] == TBoardSize - 1) //dark promotion
+            board[cur->moves[best][2]][cur->moves[best][3]] = 'D';
+        cur = cur->children[best];
     } while (cur->position != -1);
     printf("W:%d G:%d K:%d\n", root->wins.load() / 2, root->games.load() / 2, kernels.load());
     for (int i = 0; i < THREADS; i++)

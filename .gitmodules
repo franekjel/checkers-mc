@@ -1,0 +1,3 @@
+[submodule "CheckerBoard"]
+	path = CheckerBoard
+	url = https://github.com/eygilbert/CheckerBoard

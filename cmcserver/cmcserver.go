@@ -10,9 +10,12 @@ import (
 )
 
 func main() {
-	checkersPath := flag.StringP("path", "p", "./checkers-mc", "path to checkers-mc executable")
+	checkersPath := flag.StringP("executable", "e", "./checkers-mc", "path to checkers-mc executable")
+	port := flag.Uint16P("port", "p", 11821, "port to listening")
 	flag.Parse()
 	checkExecutable(*checkersPath)
+	ch := make(chan *connectionData)
+	startListening(*port, ch)
 }
 
 func checkExecutable(path string) {

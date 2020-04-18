@@ -16,6 +16,20 @@ func main() {
 	checkExecutable(*checkersPath)
 	ch := make(chan *connectionData)
 	startListening(*port, ch)
+
+	for {
+		request := <-ch
+		cmd := exec.Command(*checkersPath, "-p"+string(request.data[0]))
+		cmd.Stdin = strings.NewReader(string(request.data[2:]))
+		out, err := cmd.Output()
+		if err != nil {
+			log.Print("Error launching ", *checkersPath, ": ", err.Error())
+			sendResponse(request.conn, []byte("0"))
+		} else {
+			sendResponse(request.conn, out)
+		}
+
+	}
 }
 
 func checkExecutable(path string) {

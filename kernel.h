@@ -438,7 +438,7 @@ void findMoveGPU(char board[TBoardSize][TBoardSize], int timeout, int player)
             board[cur->moves[best][2]][cur->moves[best][3]] = 'D';
         cur = cur->children[best];
     } while (cur->position != -1);
-    printf("W:%d G:%d K:%d\n", root->wins.load() / 2, root->games.load() / 2, kernels.load());
+//    printf("W:%d G:%d K:%d\n", root->wins.load() / 2, root->games.load() / 2, kernels.load());
     for (int i = 0; i < THREADS; i++)
     {
         cudaStreamDestroy(tData[i].stream);

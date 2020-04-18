@@ -16,7 +16,10 @@ type connectionData struct {
 //reads 4 bytes and convert it to uint
 func readUint(conn net.Conn) uint {
 	buff := readNBytes(conn, 4)
-	return uint(binary.BigEndian.Uint32(buff))
+	if buff != nil {
+		return uint(binary.BigEndian.Uint32(buff))
+	}
+	return 0
 }
 
 //reads n bytes from conn
@@ -99,6 +102,7 @@ func startListening(port uint16, ch chan *connectionData) {
 			log.Printf("Cannot accept connection: %s", err.Error())
 			continue
 		}
+		log.Print("Got connection from ", conn.RemoteAddr())
 		go readMessage(conn, ch)
 	}
 }

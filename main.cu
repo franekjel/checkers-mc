@@ -110,13 +110,13 @@ int main(int argc, char* argv[])
     checkBoard(b, argv);
 
     findMoveGPU<AmericanRules, 8, 48>(b, timeout, player);
-
+/*
     for (int y = 0; y < 8; y++)
     {
         for (int x = 0; x < 8; x++)
             printf("%c", b[x][y]);
         printf("\n");
     }
-
+*/
     return 0;
 }

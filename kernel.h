@@ -421,13 +421,13 @@ void findMoveGPU(char board[TBoardSize][TBoardSize], int timeout, int player)
         cur = cur->children[best];
     } while (cur->position != -1);
 
-    printf("%d\n", movesCount);
+//    printf("%d\n", movesCount);
 
     cur = root;
     do
     {
         int best = getBestMove(cur);
-        printf("%d %d %d %d\n", cur->moves[best][0], cur->moves[best][1], cur->moves[best][2], cur->moves[best][3]);
+ //       printf("%d %d %d %d\n", cur->moves[best][0], cur->moves[best][1], cur->moves[best][2], cur->moves[best][3]);
         board[cur->moves[best][2]][cur->moves[best][3]] = board[cur->moves[best][0]][cur->moves[best][1]];
         board[cur->moves[best][0]][cur->moves[best][1]] = '.';
         if (cur->moves[best][0] - cur->moves[best][2] == 2 || cur->moves[best][0] - cur->moves[best][2] == -2) //capturign move

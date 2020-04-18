@@ -19,8 +19,9 @@ func main() {
 
 	for {
 		request := <-ch
+		log.Print(string(request.data))
 		cmd := exec.Command(*checkersPath, "-p"+string(request.data[0]))
-		cmd.Stdin = strings.NewReader(string(request.data[2:]))
+		cmd.Stdin = strings.NewReader(string(request.data[1:]))
 		out, err := cmd.Output()
 		if err != nil {
 			log.Print("Error launching ", *checkersPath, ": ", err.Error())

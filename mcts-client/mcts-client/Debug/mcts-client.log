@@ -1,0 +1,4 @@
+﻿  dllmain.c
+c:\users\frane\desktop\mcts-client\mcts-client\dllmain.c(107): warning C4133: "funkcja": niezgodne typy - od "int *" do "const char *"
+c:\users\frane\desktop\mcts-client\mcts-client\dllmain.c(112): warning C4133: "funkcja": niezgodne typy - od "int *" do "char *"
+  mcts-client.vcxproj -> C:\Users\frane\Desktop\mcts-client\Debug\mcts-client.dll

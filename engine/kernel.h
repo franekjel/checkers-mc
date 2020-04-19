@@ -101,7 +101,7 @@ static int chooseNode(TreeNode* cur, TreeNode* root)
 
 static int getBestMove(TreeNode* cur)
 {
-    int max = 0;
+    float max = -1;
     int maxi = -1;
     for (int i = 0; i < cur->movesN; i++)
     {
@@ -413,21 +413,21 @@ void findMoveGPU(char board[TBoardSize][TBoardSize], int timeout, int player)
         pthread_join(threads[i], NULL);
 
     TreeNode* cur = root;
-    int movesCount = 0;
-    do
+    int movesCount = 1;
+    while (cur->position != -1 || cur->movesN < 1)
     {
         int best = getBestMove(cur);
-        movesCount++;
         cur = cur->children[best];
-    } while (cur->position != -1);
+        movesCount++;
+    }
 
-//    printf("%d\n", movesCount);
+    //    printf("%d\n", movesCount);
 
     cur = root;
     do
     {
         int best = getBestMove(cur);
- //       printf("%d %d %d %d\n", cur->moves[best][0], cur->moves[best][1], cur->moves[best][2], cur->moves[best][3]);
+        //       printf("%d %d %d %d\n", cur->moves[best][0], cur->moves[best][1], cur->moves[best][2], cur->moves[best][3]);
         board[cur->moves[best][2]][cur->moves[best][3]] = board[cur->moves[best][0]][cur->moves[best][1]];
         board[cur->moves[best][0]][cur->moves[best][1]] = '.';
         if (cur->moves[best][0] - cur->moves[best][2] == 2 || cur->moves[best][0] - cur->moves[best][2] == -2) //capturign move
@@ -438,7 +438,7 @@ void findMoveGPU(char board[TBoardSize][TBoardSize], int timeout, int player)
             board[cur->moves[best][2]][cur->moves[best][3]] = 'D';
         cur = cur->children[best];
     } while (cur->position != -1);
-//    printf("W:%d G:%d K:%d\n", root->wins.load() / 2, root->games.load() / 2, kernels.load());
+    //    printf("W:%d G:%d K:%d\n", root->wins.load() / 2, root->games.load() / 2, kernels.load());
     for (int i = 0; i < THREADS; i++)
     {
         cudaStreamDestroy(tData[i].stream);

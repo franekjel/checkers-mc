@@ -87,8 +87,8 @@ static int chooseNode(TreeNode* cur, TreeNode* root)
         else
         {
             float u = float(cur->children[i]->wins) / float(cur->children[i]->games); // w/g
-            u += 7 * sqrtf(logf(root->games) / float(cur->children[i]->games));
-            u += rand() % 2;
+            u += 5 * sqrtf(logf(root->games) / float(cur->children[i]->games));
+            //u += rand() % 2;
             if (u > max)
             {
                 max = u;
@@ -405,6 +405,7 @@ void findMoveGPU(char board[TBoardSize][TBoardSize], int timeout, int player)
         cudaEventSynchronize(stop);
         cudaEventElapsedTime(&elapsed, start, stop);
     }
+
     running = false;
     cudaProfilerStop();
     cudaEventDestroy(start);

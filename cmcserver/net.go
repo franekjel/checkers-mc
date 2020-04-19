@@ -5,7 +5,6 @@ import (
 	"log"
 	"net"
 	"strconv"
-	"time"
 )
 
 type connectionData struct {
@@ -27,7 +26,7 @@ func readNBytes(conn net.Conn, n uint) []byte {
 	buff := make([]byte, n)
 	var i uint
 	for i < n {
-		nbyte, err := conn.Read(buff[i:n])
+		nbyte, err := conn.Read(buff[i:])
 		i += uint(nbyte)
 		if err != nil {
 			log.Printf("Cannot read message: %s", err.Error())
@@ -40,15 +39,17 @@ func readNBytes(conn net.Conn, n uint) []byte {
 //send given uint
 func sendUint(conn net.Conn, n uint32) {
 	buff := make([]byte, 4)
+	log.Print(n)
 	binary.BigEndian.PutUint32(buff, n)
 	var i int
 	for i < 4 {
-		n, err := conn.Write(buff[i:4])
+		n, err := conn.Write(buff[i:])
 		i += n
 		if err != nil {
-			log.Printf("Cannot send data to client %s. %s", conn.RemoteAddr().String(), err.Error())
+			log.Printf("Cannot send data to client: %s", err.Error())
 			return
 		}
+		log.Printf("Sended %d/4", i)
 	}
 }
 
@@ -57,7 +58,7 @@ func sendSlice(conn net.Conn, buff []byte) {
 	var i = 0
 	n := len(buff)
 	for i < n {
-		nbyte, err := conn.Write(buff[i:n])
+		nbyte, err := conn.Write(buff[i:])
 		i += nbyte
 		if err != nil {
 			log.Printf("Cannot send slice to client")
@@ -68,7 +69,7 @@ func sendSlice(conn net.Conn, buff []byte) {
 
 //reads data from client and send to chan
 func readMessage(conn net.Conn, ch chan *connectionData) {
-	conn.SetDeadline(time.Now().Add(3 * time.Second))
+	//conn.SetDeadline(time.Now().Add(3 * time.Second))
 	msgSize := readUint(conn)
 	if msgSize == 0 || msgSize > 128*1024 {
 		log.Printf("Bad message size or other error from %s", conn.RemoteAddr().String())

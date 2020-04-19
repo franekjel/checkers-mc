@@ -15,19 +15,21 @@ func main() {
 	flag.Parse()
 	checkExecutable(*checkersPath)
 	ch := make(chan *connectionData)
-	startListening(*port, ch)
+	go startListening(*port, ch)
 
 	for {
 		request := <-ch
-		log.Print(string(request.data))
+		log.Print(string(request.data[:len(request.data)-1]))
 		cmd := exec.Command(*checkersPath, "-p"+string(request.data[0]))
 		cmd.Stdin = strings.NewReader(string(request.data[1:]))
 		out, err := cmd.Output()
+		log.Print(string(out))
 		if err != nil {
 			log.Print("Error launching ", *checkersPath, ": ", err.Error())
-			sendResponse(request.conn, []byte("0"))
+			sendResponse(request.conn, []byte(""))
 		} else {
 			sendResponse(request.conn, out)
+			log.Print("Response sent")
 		}
 
 	}

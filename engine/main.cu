@@ -117,6 +117,6 @@ int main(int argc, char* argv[])
             printf("%c", b[x][y]);
         printf("\n");
     }
- 
+
     return 0;
 }

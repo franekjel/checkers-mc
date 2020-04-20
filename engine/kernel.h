@@ -76,7 +76,7 @@ static void FreeMemory(TreeNode* root)
     delete root;
 }
 
-static int chooseNode(TreeNode* cur, TreeNode* root)
+static int chooseNode(TreeNode* cur)
 {
     float max = 0;
     int maxi = 0;
@@ -87,8 +87,7 @@ static int chooseNode(TreeNode* cur, TreeNode* root)
         else
         {
             float u = float(cur->children[i]->wins) / float(cur->children[i]->games); // w/g
-            u += 5 * sqrtf(logf(root->games) / float(cur->children[i]->games));
-            //u += rand() % 2;
+            u += 2 * sqrtf(logf(cur->parent->games) / float(cur->children[i]->games));
             if (u > max)
             {
                 max = u;
@@ -106,10 +105,9 @@ static int getBestMove(TreeNode* cur)
     for (int i = 0; i < cur->movesN; i++)
     {
         float g = cur->children[i]->games.load();
-        float w = cur->children[i]->wins.load();
-        if (w / g > max)
+        if (g > max)
         {
-            max = w / g;
+            max = g;
             maxi = i;
         }
     }
@@ -253,17 +251,18 @@ static TreeNode* MCTSSelectionAndExpansion(char board[TBoardSize][TBoardSize], T
     TreeNode* cur = root;
     while (cur->movesN != -1 && cur->games.load() > N0)
     {
-        int i = chooseNode(cur, root);
+        int i = chooseNode(cur);
         cur->games.fetch_add(BLOCK * 2, std::memory_order_relaxed); //x2 since win = 2
         if (cur->movesN == 0)
         { //leaf, update result
+            TreeNode* ret = cur;
             int r = (orginalPlayer ^ *player) * 2;
             do
             {
                 cur->wins.fetch_add(r * BLOCK, std::memory_order_relaxed);
                 cur = cur->parent;
             } while (cur->parent);
-            return nullptr;
+            return ret;
         }
 
         //do move
@@ -316,8 +315,19 @@ void* thread(void* data)
         memcpy(b, d->board, boardArea * sizeof(char));
         p = d->player;
 
+        int i = 0;
         while (cur == nullptr || cur->movesN == 0)
+        {
+            p = d->player;
             cur = MCTSSelectionAndExpansion<TRules, TBoardSize, TMaxMoves>(b, d->root, &p);
+            i++;
+            if (!running || i > 10)
+            {
+                running = false;
+                pthread_mutex_unlock(d->rootMutex);
+                return NULL;
+            }
+        }
         pthread_mutex_unlock(d->rootMutex);
         //critical part end
 

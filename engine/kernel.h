@@ -86,8 +86,13 @@ static int chooseNode(TreeNode* cur)
             return i;
         else
         {
-            float u = float(cur->children[i]->wins) / float(cur->children[i]->games); // w/g
-            u += 2 * sqrtf(logf(cur->parent->games) / float(cur->children[i]->games));
+            float N0;
+            if (cur->parent != nullptr)
+                N0 = cur->parent->games.load();
+            else
+                N0 = cur->games.load();
+            float u = float(cur->children[i]->wins.load()) / float(cur->children[i]->games.load()); // w/g
+            u += 2 * sqrtf(logf(N0) / float(cur->children[i]->games.load()));
             if (u > max)
             {
                 max = u;

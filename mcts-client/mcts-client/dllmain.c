@@ -60,19 +60,18 @@ int WINAPI getmove(int board[8][8], int color, double maxtime, char str[1024], i
 	char b[8][8];
 	for (int i = 0; i < 8; i++) {
 		for (int j = 0; j < 8; j++) {
-			b[i][j] = '.';
-			if (board[i][j] == (BLACK | MAN))
-				b[i][j] = 'd';
-			if (board[i][j] == (BLACK | KING))
-				b[i][j] = 'D';
-			if (board[i][j] == (WHITE | MAN))
-				b[i][j] = 'l';
-			if (board[i][j] == (WHITE | KING))
-				b[i][j] = 'L';
+			b[i][7 - j] = '.';
+			if (board[j][i] == (BLACK | MAN))
+				b[i][7 - j] = 'd';
+			if (board[j][i] == (BLACK | KING))
+				b[i][7 - j] = 'D';
+			if (board[j][i] == (WHITE | MAN))
+				b[i][7 - j] = 'l';
+			if (board[j][i] == (WHITE | KING))
+				b[i][7 - j] = 'L';
 		}
 	}
-	strncpy(str, "checkers-mc", 256);//maybe put here winratio of simulations
-	
+
 	WSADATA wsaData;
 	int result = WSAStartup(MAKEWORD(2, 2), &wsaData);
 	if (result != NO_ERROR) {
@@ -82,7 +81,7 @@ int WINAPI getmove(int board[8][8], int color, double maxtime, char str[1024], i
 	SOCKET server = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 	if (server == INVALID_SOCKET)
 	{
-		sprintf_s(str, 256, "Error creating socket: %ld\n", WSAGetLastError());
+		sprintf_s(str, 256, "Error creating socket: %ld", WSAGetLastError());
 		WSACleanup();
 		return 3;
 	}
@@ -97,7 +96,7 @@ int WINAPI getmove(int board[8][8], int color, double maxtime, char str[1024], i
 	char buffer[80];
 	strncpy(str, "connected", 256);
 	//message is 0 or 1 on first byte (player) then 64 bytes of board then \n\0
-	buffer[0] = color - 1;//checkers-mc use 0 for white and 1 for black
+	buffer[0] = '0'+ (color - 1);//checkers-mc use 0 for white and 1 for black
 	for (int i = 0; i < 64; i++)
 		buffer[i+1] = b[i / 8][i % 8];
 	buffer[65] = '\n';
@@ -114,6 +113,7 @@ int WINAPI getmove(int board[8][8], int color, double maxtime, char str[1024], i
 	int received = 0;
 	while (received < size) {//then we receive full message
 		received += recv(server, buffer + received, size - received, 0);
+		sprintf_s(str, 256, "received %d\\%d bytes", received,size);
 	}
 
 	//return message contains \n after each 8 squares
@@ -124,6 +124,21 @@ int WINAPI getmove(int board[8][8], int color, double maxtime, char str[1024], i
 			j++;
 		}
 	}
+	
+	for (int i = 0; i < 8; i++) {
+		for (int j = 0; j < 8; j++) {
+			board[7-i][j] = FREE;
+			if (b[j][i] == 'd')
+				board[7-i][j] = BLACK | MAN;
+			if (b[j][i] == 'D')
+				board[7-i][j] = BLACK | KING;
+			if (b[j][i] == 'l')
+				board[7-i][j] = WHITE | MAN;
+			if (b[j][i] == 'L')
+				board[7-i][j] = WHITE | KING;
+		}
+	}
+	closesocket(server);
 
 	return 3;//UNKNOWN
 }

@@ -11,8 +11,29 @@
 #include <curand.h>
 #include <curand_kernel.h>
 
-//One move - from.x, from.y, to.x, to.y It have operator=
+//One move - x1,y1,x2,y2
 typedef int8_t Move[4];
+
+/*TODO for better perf and debugging change to this
+typedef struct Move
+{
+    int8_t x1, y1, x2, y2;
+    int8_t operator[](int i)
+    {
+        switch (i)
+        {
+        case 0:
+            return x1;
+        case 1:
+            return y1;
+        case 2:
+            return x2;
+        case 3:
+            return y2;
+        }
+    }
+};
+*/
 
 /* class Rules isn't used. It only show functions and variables class should implement to be used as game rules.
  * since polymorphism reduced performance ~90% using templates on static classes is probably the best soltion (best I can think of)
@@ -41,11 +62,13 @@ public:
     template <int TBoardSize, int TMaxMoves>
     static __device__ __host__ void getMovesDarkPos(char board[TBoardSize][TBoardSize], Move moves[TMaxMoves], int& captures, int8_t x, int8_t y, int& n);
 
-    /* Check for game result on given board state
-     * 0 - light win, 1 dark win, -1 - nothing
-     */
+    /*
+     * Do one move (one means no multiple capture).
+     * If after move piece is on square for promotion function should promote
+     * Return value is true if there was promotion or false if not
+    */
     template <int TBoardSize>
-    static __device__ __host__ int checkResult(char board[TBoardSize][TBoardSize]);
+    static __device__ __host__ bool doMove(char board[TBoardSize][TBoardSize], Move move);
 };
 
 /* Parameters for templates:

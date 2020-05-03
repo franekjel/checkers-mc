@@ -28,8 +28,6 @@ extern "C"
 int Player = 0;
 int device;
 
-std::atomic<int> kernels;
-
 volatile sig_atomic_t running = 1;
 
 //One move - from.x, from.y, to.x, to.y It have operator=
@@ -62,7 +60,7 @@ struct ThreadData
     int player;
     char* boards;
     int* positions;
-    float* results;
+    int* results;
     curandState* states;
     pthread_mutex_t* rootMutex;
     TreeNode* root;
@@ -76,23 +74,23 @@ static void FreeMemory(TreeNode* root)
     delete root;
 }
 
-static int chooseNode(TreeNode* cur)
+static int chooseNode(TreeNode* cur, int player)
 {
-    float max = 0;
+    float max = -2;
     int maxi = 0;
+    float N0 = cur->games.load();
     for (int i = 0; i < cur->movesN; i++)
     {
-        if (cur->children[i]->games == 0)
+        float g = cur->children[i]->games.load();
+        if (g == 0)
             return i;
         else
         {
-            float N0;
-            if (cur->parent != nullptr)
-                N0 = cur->parent->games.load();
-            else
-                N0 = cur->games.load();
-            float u = float(cur->children[i]->wins.load()) / float(cur->children[i]->games.load()); // w/g
-            u += 2 * sqrtf(logf(N0) / float(cur->children[i]->games.load()));
+            float w = cur->children[i]->wins.load();
+            float u = w / g;
+            if (player != Player)
+                u *= -1;
+            u += 0.7 * sqrtf(logf(N0) / g);
             if (u > max)
             {
                 max = u;
@@ -150,9 +148,9 @@ static void Expand(TreeNode* node, char board[TBoardSize][TBoardSize], int playe
         { //if there are capturing moves all are capturing. So we check if after capture we have another possibility to capture
             char b[TBoardSize][TBoardSize];
             memcpy(b, board, TBoardSize * TBoardSize * sizeof(char));
-            b[node->moves[i][2]][node->moves[i][3]] = b[node->moves[i][0]][node->moves[i][1]];
-            b[node->moves[i][0]][node->moves[i][1]] = '.';
-            b[(node->moves[i][0] + node->moves[i][2]) / 2][(node->moves[i][1] + node->moves[i][3]) / 2] = '.';
+            bool promotion = TRules::doMove(b, node->moves[i]);
+            if (promotion) //pawn after promotion cannot capture
+                continue;
             int m = 0;
             Move mvs[TMaxMoves];
             int cptr = 0;
@@ -171,7 +169,7 @@ static void Expand(TreeNode* node, char board[TBoardSize][TBoardSize], int playe
 //simulation starts in node with children, we choose one and do random game. Then backpropagate result
 //__global__ void __launch_bounds__(BLOCK) MCTSSimulation(char* boards, int* positions, curandState* states, int player, int orginalPlayer, float* results)
 template <class TRules, int TBoardSize, int TMaxMoves>
-__global__ void MCTSSimulation(char* boards, int* positions, curandState* states, int player, int orginalPlayer, float* results)
+__global__ void MCTSSimulation(char* boards, int* positions, curandState* states, int player, int orginalPlayer, int* results)
 {
     const int boardArea = TBoardSize * TBoardSize;
     int idx = threadIdx.x;
@@ -179,16 +177,15 @@ __global__ void MCTSSimulation(char* boards, int* positions, curandState* states
     char board[TBoardSize][TBoardSize];
     memcpy(board, boards + (boardArea * idx), boardArea * sizeof(char));
     int dep = 0; //depth
-    float r = 0; //result
+    int r = 1; //result - default draw
     Move moves[TMaxMoves];
     int captures = 0;
     int xpos = positions[idx] % TBoardSize, ypos = positions[idx] / TBoardSize;
-    positions[idx] = -1;
     while (dep < 120)
     { //NOTE: magic number! - max depth of simulation
         int n = 0;
         captures = 0;
-        if (xpos > -1)
+        if (xpos != -1)
         {
             if (player)
                 TRules::getMovesDarkPos(board, moves, captures, xpos, ypos, n);
@@ -201,23 +198,20 @@ __global__ void MCTSSimulation(char* boards, int* positions, curandState* states
             else
                 n = genMovesLight<TRules, TBoardSize, TMaxMoves>(board, moves, captures);
         }
-        if (n == 0)
+        if (n == 0) //player cannot do any move
         {
-            r = player ^ orginalPlayer;
+            r = player ^ orginalPlayer; //if root player cannot move this is loss. Otherwise this is win.
             r *= 2;
             break;
         }
-
         if (captures > 0)
             n = filterMoves<TMaxMoves>(moves, n);
         int i = curand(&state) % n;
         if (dep == 0)
-            positions[idx] = i;
-        board[moves[i][2]][moves[i][3]] = board[moves[i][0]][moves[i][1]];
-        board[moves[i][0]][moves[i][1]] = '.';
-        if (moves[i][0] - moves[i][2] == 2 || moves[i][0] - moves[i][2] == -2)
-        { //capturign move
-            board[(moves[i][2] + moves[i][0]) / 2][(moves[i][3] + moves[i][1]) / 2] = '.';
+            positions[idx] = i; //here positions is to tell main thread to which branch thread go
+        bool promotion = TRules::doMove(board, moves[i]);
+        if (!promotion && (moves[i][0] - moves[i][2] == 2 || moves[i][0] - moves[i][2] == -2)) //capturign move and not promotion
+        {
             xpos = moves[i][2];
             ypos = moves[i][3];
             int cptr = 0, m = 0;
@@ -232,36 +226,28 @@ __global__ void MCTSSimulation(char* boards, int* positions, curandState* states
                 player = player ^ 1;
             }
         } else
-            player = player ^ 1;
-        int c = TRules::checkResult(board);
-        if (c != -1)
         {
-            if (c == orginalPlayer)
-                r = 2;
-            break;
+            player = player ^ 1;
         }
         dep++;
-    } //simulation
-    if (dep == 120)
-        r = 1;
+    }
 
     results[idx] = r;
 }
 
 template <class TRules, int TBoardSize, int TMaxMoves>
-static TreeNode* MCTSSelectionAndExpansion(char board[TBoardSize][TBoardSize], TreeNode* root, int* player)
+static TreeNode* MCTSSelectionAndExpansion(char board[TBoardSize][TBoardSize], TreeNode* root, int* player, int orginalPlayer)
 {
-    int orginalPlayer = *player;
-    int N0 = 20; //NOTE: magic number! - how fast node expands
+    int N0 = 20; //NOTE: magic number! - how fast node expands. Node is expanded after there is more than N0 games
     TreeNode* cur = root;
     while (cur->movesN != -1 && cur->games.load() > N0)
     {
-        int i = chooseNode(cur);
+        int i = chooseNode(cur, *player);
         cur->games.fetch_add(BLOCK * 2, std::memory_order_relaxed); //x2 since win = 2
         if (cur->movesN == 0)
         { //leaf, update result
             TreeNode* ret = cur;
-            int r = (orginalPlayer ^ *player) * 2;
+            int r = (*player ^ orginalPlayer) * 2;
             do
             {
                 cur->wins.fetch_add(r * BLOCK, std::memory_order_relaxed);
@@ -269,17 +255,7 @@ static TreeNode* MCTSSelectionAndExpansion(char board[TBoardSize][TBoardSize], T
             } while (cur->parent);
             return ret;
         }
-
-        //do move
-        board[cur->moves[i][2]][cur->moves[i][3]] = board[cur->moves[i][0]][cur->moves[i][1]];
-        board[cur->moves[i][0]][cur->moves[i][1]] = '.';
-        if (cur->moves[i][0] - cur->moves[i][2] == 2 || cur->moves[i][0] - cur->moves[i][2] == -2) //capturign move
-            board[(cur->moves[i][2] + cur->moves[i][0]) / 2][(cur->moves[i][3] + cur->moves[i][1]) / 2] = '.';
-        if (board[cur->moves[i][2]][cur->moves[i][3]] == 'l' && cur->moves[i][3] == 0) //light promotion
-            board[cur->moves[i][2]][cur->moves[i][3]] = 'L';
-        if (board[cur->moves[i][2]][cur->moves[i][3]] == 'd' && cur->moves[i][3] == TBoardSize - 1) //dark promotion
-            board[cur->moves[i][2]][cur->moves[i][3]] = 'D';
-
+        TRules::doMove(board, cur->moves[i]);
         cur = cur->children[i];
         if (cur->position == -1)
             *player = *player ^ 1;
@@ -314,17 +290,15 @@ void* thread(void* data)
     while (running)
     {
         cur = nullptr;
-
-        //critical part - tree search
-        pthread_mutex_lock(d->rootMutex);
         memcpy(b, d->board, boardArea * sizeof(char));
         p = d->player;
-
         int i = 0;
+        //critical part - tree search
+        pthread_mutex_lock(d->rootMutex);
         while (cur == nullptr || cur->movesN == 0)
         {
             p = d->player;
-            cur = MCTSSelectionAndExpansion<TRules, TBoardSize, TMaxMoves>(b, d->root, &p);
+            cur = MCTSSelectionAndExpansion<TRules, TBoardSize, TMaxMoves>(b, d->root, &p, Player);
             i++;
             if (!running || i > 10)
             {
@@ -336,11 +310,10 @@ void* thread(void* data)
         pthread_mutex_unlock(d->rootMutex);
         //critical part end
 
-        int n = cur->movesN;
         for (int i = 0; i < BLOCK; i++)
         {
             memcpy(d->boards + (i * boardArea * sizeof(char)), b, boardArea * sizeof(char));
-            d->positions[i] = cur->children[i % n]->position;
+            d->positions[i] = cur->position;
         }
 
         cudaMemPrefetchAsync(d->boards, BLOCK * sizeof(char[TBoardSize][TBoardSize]), device, d->stream);
@@ -348,15 +321,18 @@ void* thread(void* data)
         cudaMemPrefetchAsync(d->results, BLOCK * sizeof(float), device, d->stream);
         MCTSSimulation<TRules, TBoardSize, TMaxMoves><<<1, BLOCK, 0, d->stream>>>(d->boards, d->positions, d->states, p, Player, d->results);
         cudaStreamSynchronize(d->stream);
+        cudaMemPrefetchAsync(d->results, BLOCK * sizeof(float), cudaCpuDeviceId, d->stream);
+        cudaMemPrefetchAsync(d->positions, BLOCK * sizeof(int), cudaCpuDeviceId, d->stream);
+        cudaStreamSynchronize(d->stream);
         int s = 0;
         for (int i = 0; i < BLOCK; i++)
         {
             int r = d->results[i];
-            cur->children[i % n]->games.fetch_add(2, std::memory_order_relaxed);
-            if (r)
+            cur->children[d->positions[i]]->games.fetch_add(2, std::memory_order_relaxed);
+            if (r != 0)
             {
                 s += r;
-                cur->children[i % n]->wins.fetch_add(r, std::memory_order_relaxed);
+                cur->children[d->positions[i]]->wins.fetch_add(r, std::memory_order_relaxed);
             }
         }
         while (cur->parent)
@@ -366,7 +342,6 @@ void* thread(void* data)
         }
         cur->wins.fetch_add(s, std::memory_order_relaxed);
 
-        kernels.fetch_add(1, std::memory_order_relaxed);
         //end
     }
     return NULL;
@@ -403,7 +378,7 @@ void findMoveGPU(char board[TBoardSize][TBoardSize], int timeout, int player)
         cudaStreamCreate(&tData[i].stream);
         cudaMallocManaged(&tData[i].boards, BLOCK * sizeof(char[TBoardSize][TBoardSize]));
         cudaMallocManaged(&tData[i].positions, BLOCK * sizeof(int));
-        cudaMallocManaged(&tData[i].results, BLOCK * sizeof(float));
+        cudaMallocManaged(&tData[i].results, BLOCK * sizeof(int));
         cudaMallocManaged(&tData[i].states, BLOCK * sizeof(curandState));
         cudaMemAdvise(tData[i].states, BLOCK * sizeof(curandState), cudaMemAdviseSetPreferredLocation, device);
         tData[i].root = root;
@@ -437,13 +412,13 @@ void findMoveGPU(char board[TBoardSize][TBoardSize], int timeout, int player)
         movesCount++;
     }
 
-    //    printf("%d\n", movesCount);
+    //printf("%d\n", movesCount);
 
     cur = root;
     do
     {
         int best = getBestMove(cur);
-        //       printf("%d %d %d %d\n", cur->moves[best][0], cur->moves[best][1], cur->moves[best][2], cur->moves[best][3]);
+        //printf("%d %d %d %d\n", cur->moves[best][0], cur->moves[best][1], cur->moves[best][2], cur->moves[best][3]);
         board[cur->moves[best][2]][cur->moves[best][3]] = board[cur->moves[best][0]][cur->moves[best][1]];
         board[cur->moves[best][0]][cur->moves[best][1]] = '.';
         if (cur->moves[best][0] - cur->moves[best][2] == 2 || cur->moves[best][0] - cur->moves[best][2] == -2) //capturign move
@@ -454,7 +429,11 @@ void findMoveGPU(char board[TBoardSize][TBoardSize], int timeout, int player)
             board[cur->moves[best][2]][cur->moves[best][3]] = 'D';
         cur = cur->children[best];
     } while (cur->position != -1);
-    //    printf("W:%d G:%d K:%d\n", root->wins.load() / 2, root->games.load() / 2, kernels.load());
+    /*
+    printf("W:%d G:%d\n", root->wins.load() / 2, root->games.load() / 2);
+    for (int i = 0; i < root->movesN; i++)
+        printf("W:%d G:%d WG:%f\n", root->children[i]->wins.load() / 2, root->children[i]->games.load() / 2, float(root->children[i]->wins.load()) / float(root->children[i]->games.load()));
+    */
     for (int i = 0; i < THREADS; i++)
     {
         cudaStreamDestroy(tData[i].stream);

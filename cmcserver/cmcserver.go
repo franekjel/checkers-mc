@@ -20,10 +20,10 @@ func main() {
 	for {
 		request := <-ch
 		log.Print(string(request.data[:len(request.data)-1]))
-		cmd := exec.Command(*checkersPath, "-p"+string(request.data[0]))
+		cmd := exec.Command(*checkersPath, "-p"+string(request.data[0]), "-t1000")
 		cmd.Stdin = strings.NewReader(string(request.data[1:]))
 		out, err := cmd.Output()
-		log.Print(string(out))
+		log.Print("\n"+string(out))
 		if err != nil {
 			log.Print("Error launching ", *checkersPath, ": ", err.Error())
 			sendResponse(request.conn, []byte(""))

@@ -131,7 +131,7 @@ public:
                     moves[n][2] = x - 2;
                     moves[n][3] = y + 2;
                     n++;
-                    (captures)++;
+                    captures++;
                 }
                 if (x < 6 && board[x + 2][y + 2] == '.' && (board[x + 1][y + 1] == 'l' || board[x + 1][y + 1] == 'L'))
                 {
@@ -140,7 +140,7 @@ public:
                     moves[n][2] = x + 2;
                     moves[n][3] = y + 2;
                     n++;
-                    (captures)++;
+                    captures++;
                 }
             }
 
@@ -174,7 +174,7 @@ public:
                         moves[n][2] = x - 2;
                         moves[n][3] = y - 2;
                         n++;
-                        (captures)++;
+                        captures++;
                     }
                     if (x < 6 && board[x + 2][y - 2] == '.' && (board[x + 1][y - 1] == 'l' || board[x + 1][y - 1] == 'L'))
                     {
@@ -183,29 +183,30 @@ public:
                         moves[n][2] = x + 2;
                         moves[n][3] = y - 2;
                         n++;
-                        (captures)++;
+                        captures++;
                     }
                 }
             } //king
         }
     }
-    static __device__ __host__ int checkResult(char board[8][8])
+
+    static __device__ __host__ bool doMove(char board[8][8], Move move)
     {
-        int l = 0, d = 0;
-        for (int x = 0; x < 8; x++)
-        {
-            for (int y = 0; y < 8; y++)
-            {
-                if (board[x][y] == 'd' || board[x][y] == 'D')
-                    d++;
-                if (board[x][y] == 'l' || board[x][y] == 'L')
-                    l++;
-            }
+        bool promotion = 0;
+        board[move[2]][move[3]] = board[move[0]][move[1]];
+        board[move[0]][move[1]] = '.';
+        if (move[0] - move[2] == 2 || move[0] - move[2] == -2) //capturign move
+            board[(move[2] + move[0]) / 2][(move[3] + move[1]) / 2] = '.';
+        if (board[move[2]][move[3]] == 'l' && move[3] == 0)
+        { //light promotion
+            board[move[2]][move[3]] = 'L';
+            promotion = true;
         }
-        if (l == 0)
-            return 1;
-        if (d == 0)
-            return 0;
-        return -1;
+        if (board[move[2]][move[3]] == 'd' && move[3] == 7)
+        { //dark promotion
+            board[move[2]][move[3]] = 'D';
+            promotion = true;
+        }
+        return promotion;
     }
 };

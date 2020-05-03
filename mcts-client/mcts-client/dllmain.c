@@ -41,22 +41,25 @@ struct CBmove
 #define KING 8
 #define FREE 0
 
-int WINAPI enginecommand(char command[256], char reply[1024]) 
+int WINAPI enginecommand(char command[256], char reply[256]) 
 {
+
+
 	if (strncmp(command, "name", 4) == 0) {
-		strncpy(reply, "checkers-mc client", 256);
+		sprintf(reply, "checkers-mc client");
 		return 1;
 	}
 	if (strncmp(command, "about", 5) == 0) {
-		strncpy(reply, "client for https://github.com/franekjel/checkers-mc", 256);
+		sprintf(reply, "client for https://github.com/franekjel/checkers-mc");
 		return 1;
 	}
-	strncpy(reply, "?", 256);
+	sprintf(reply, "?");
 	return 0;
 }
 
 int WINAPI getmove(int board[8][8], int color, double maxtime, char str[1024], int *playnow, int info, int moreinfo, struct CBmove *move) 
-{
+{	
+	strncpy(str, "MCTS. Converting board", 256);
 	char b[8][8];
 	for (int i = 0; i < 8; i++) {
 		for (int j = 0; j < 8; j++) {
@@ -85,6 +88,9 @@ int WINAPI getmove(int board[8][8], int color, double maxtime, char str[1024], i
 		WSACleanup();
 		return 3;
 	}
+	DWORD timeout = 3000;
+	if (setsockopt(server, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof(timeout)) == SOCKET_ERROR)
+		return 3;
 
 	SOCKADDR_IN addr;
 	memset(&addr, 0, sizeof(addr));
@@ -108,11 +114,16 @@ int WINAPI getmove(int board[8][8], int color, double maxtime, char str[1024], i
 	while (sended < size) {//then we send message
 		sended+= send(server, buffer+sended, size-sended, 0);
 	}
+	strncpy(str, "waiting for response", 256);
 	recv(server, &NSize, 4, 0);//we wait to receive size of message
 	size = ntohl(NSize);
 	int received = 0;
+	strncpy(str, "waiting for message", 256);
 	while (received < size) {//then we receive full message
-		received += recv(server, buffer + received, size - received, 0);
+		int status= recv(server, buffer + received, size - received, 0);
+		if (status == SOCKET_ERROR)
+			return 3;
+		received += status;
 		sprintf_s(str, 256, "received %d\\%d bytes", received,size);
 	}
 

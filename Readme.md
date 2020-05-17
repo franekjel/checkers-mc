@@ -4,9 +4,13 @@ Program to find best move in checkers using Monte-Carlo Tree Search and CUDA.
 
 Usage
 ---
-You can use engine directly (check engine folder) or let CheckerBoard use it. Therefore there are folders:
- - CheckerBoard - this folder contains eygilbert/CheckerBoard. It can be use to compare strenght and performance between engines
+You can use program directly (check engine folder) or as CheckerBoard enginet.
+ - CheckerBoard - this folder contains eygilbert/CheckerBoard.
  - cmcserver - small program in go to host main engine for CheckerBoard
  - engine - main program, MCTS checkers engine
- - mcts-client - .dll for CheckerBoard.
-With this you can compile cmcserver and engine on one computer with good graphics card (and eg. linux) then on another computer with windows run CheckerBoard (CheckerBoard is windows program) with mcts-client as engine
+ - mcts-client - .dll to be used by CheckerBoard
+With this you can compile cmcserver and engine on one computer with good graphics card (and linux) then on another computer with windows run CheckerBoard with mcts-client as engine
+
+Program strength
+---
+Program is better than amator player (like me) or some random online checkers programs, but loses to more powerfull engines like KingsRow or Cake. It seems that MCTS is not the best algorithm for checkers

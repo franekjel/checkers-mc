@@ -1,0 +1,1 @@
+Mcts-client is shared library for CheckerBoard. It connect to cmcserver to get moves so you need to run cmcserver on linux. Some parameters like ip address and port are hardcoded and must be adjusted before compilation.

@@ -21,11 +21,16 @@ extern "C"
 #include "rules/americanrules.h"
 #include "rules/rules.h"
 
+#include <graphviz/cdt.h>
+#include <graphviz/cgraph.h>
+#include <graphviz/gvc.h>
+
 // for Testla T4 (2560 CUDA Cores)
 #define THREADS 10
 #define BLOCK 256
 
 int Player = 0;
+int kernels = 0;
 int device;
 
 volatile sig_atomic_t running = 1;
@@ -167,8 +172,8 @@ static void Expand(TreeNode* node, char board[TBoardSize][TBoardSize], int playe
 }
 
 //simulation starts in node with children, we choose one and do random game. Then backpropagate result
-//__global__ void __launch_bounds__(BLOCK) MCTSSimulation(char* boards, int* positions, curandState* states, int player, int orginalPlayer, float* results)
 template <class TRules, int TBoardSize, int TMaxMoves>
+//__global__ void __launch_bounds__(BLOCK) MCTSSimulation(char* boards, int* positions, curandState* states, int player, int orginalPlayer, int* results)
 __global__ void MCTSSimulation(char* boards, int* positions, curandState* states, int player, int orginalPlayer, int* results)
 {
     const int boardArea = TBoardSize * TBoardSize;
@@ -292,24 +297,29 @@ void* thread(void* data)
         cur = nullptr;
         memcpy(b, d->board, boardArea * sizeof(char));
         p = d->player;
-        int i = 0;
+
         //critical part - tree search
+//#define DEBUG
+#ifdef DEBUG
+        cur = d->root;
+        cur->games.fetch_add(BLOCK * 2, std::memory_order_relaxed);
+#else
+        int i = 0;
         pthread_mutex_lock(d->rootMutex);
         while (cur == nullptr || cur->movesN == 0)
         {
             p = d->player;
             cur = MCTSSelectionAndExpansion<TRules, TBoardSize, TMaxMoves>(b, d->root, &p, Player);
             i++;
-            if (!running || i > 10)
+            if (!running)
             {
-                running = false;
                 pthread_mutex_unlock(d->rootMutex);
                 return NULL;
             }
         }
         pthread_mutex_unlock(d->rootMutex);
         //critical part end
-
+#endif
         for (int i = 0; i < BLOCK; i++)
         {
             memcpy(d->boards + (i * boardArea * sizeof(char)), b, boardArea * sizeof(char));
@@ -324,6 +334,7 @@ void* thread(void* data)
         cudaMemPrefetchAsync(d->results, BLOCK * sizeof(float), cudaCpuDeviceId, d->stream);
         cudaMemPrefetchAsync(d->positions, BLOCK * sizeof(int), cudaCpuDeviceId, d->stream);
         cudaStreamSynchronize(d->stream);
+        kernels++;
         int s = 0;
         for (int i = 0; i < BLOCK; i++)
         {
@@ -345,6 +356,37 @@ void* thread(void* data)
         //end
     }
     return NULL;
+}
+Agraph_t* g;
+int nodes = 1;
+int fullnodes = 0;
+double degree = 0;
+int maxDepth = 0;
+
+void expandNode(Agnode_t* node, TreeNode* cur, int depth)
+{
+    Agnode_t* temp;
+    Agedge_t* e;
+    char str[10];
+    //printf("moves: %d\n", cur->movesN);
+    if (cur->movesN != -1)
+    {
+        fullnodes++;
+        degree += cur->movesN;
+    }
+    if (depth > maxDepth)
+        maxDepth = depth;
+    for (int i = 0; i < cur->movesN; i++)
+    {
+        //  printf("Node %d\n", nodes);
+        sprintf(str, "%d", nodes++);
+        temp = agnode(g, str, 1);
+        agsafeset(temp, "shape", "point", "ellipse");
+        agsafeset(temp, "fontsize", "0", "14");
+        e = agedge(g, node, temp, str, 1);
+        agsafeset(e, "arrowhead", "none", "normal");
+        expandNode(temp, cur->children[i], depth + 1);
+    }
 }
 
 // find best move for light player on given board using GPU
@@ -429,6 +471,31 @@ void findMoveGPU(char board[TBoardSize][TBoardSize], int timeout, int player)
             board[cur->moves[best][2]][cur->moves[best][3]] = 'D';
         cur = cur->children[best];
     } while (cur->position != -1);
+    printf("%d\n", kernels);
+
+    GVC_t* gvc;
+    Agnode_t* n;
+    gvc = gvContext();
+    g = agopen("g", Agstrictdirected, 0);
+    n = agnode(g, "0", 1);
+    agsafeset(g, "root", "0", "");
+
+    agsafeset(n, "shape", "point", "ellipse");
+    agsafeset(n, "fontsize", "0", "14");
+    agsafeset(n, "color", "red", "black");
+    //agsafeset(n, "style", "filled", "");
+    //agsafeset(n, "fillcolor", "red", "lightgrey");
+    agsafeset(n, "root", "true", "");
+    expandNode(n, root, 0);
+    gvLayout(gvc, g, "twopi");
+    //gvRenderFilename(gvc, g, "svg", "graf.svg");
+    gvFreeLayout(gvc, g);
+    agclose(g);
+    gvFreeContext(gvc);
+    printf("Nodes %d\n", nodes);
+    printf("Expanded nodes %d\n", fullnodes);
+    printf("Mean degree %.2f\n", degree / double(fullnodes));
+    printf("Max depth %d\n", maxDepth);
     /*
     printf("W:%d G:%d\n", root->wins.load() / 2, root->games.load() / 2);
     for (int i = 0; i < root->movesN; i++)

@@ -438,7 +438,6 @@ void findMoveGPU(char board[TBoardSize][TBoardSize], int timeout, int player)
     {
         cudaStreamDestroy(tData[i].stream);
         cudaFree(&tData[i].states);
-        cudaFree(&tData[i].stream);
         cudaFree(&tData[i].boards);
         cudaFree(&tData[i].positions);
         cudaFree(&tData[i].results);

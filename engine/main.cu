@@ -94,12 +94,12 @@ int main(int argc, char* argv[])
         }
     }
     char board[64];
-    char* a = ".d.d.d.dd.d.d.d..d.d.d.d................l.l.l.l..l.l.l.ll.l.l.l.";
+    //char* a = ".d.d.d.dd.d.d.d..d.d.d.d................l.l.l.l..l.l.l.ll.l.l.l.";
     int i = 0;
     while (i < 64)
     {
-        //board[i] = getchar();
-        board[i] = a[i];
+        board[i] = getchar();
+        //board[i] = a[i];
         if (board[i] == '.' || board[i] == 'd' || board[i] == 'D' || board[i] == 'l' || board[i] == 'L')
             i++;
     }

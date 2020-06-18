@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include <cuda.h>
+#include <cudaProfiler.h>
 #include <cuda_profiler_api.h>
 #include <cuda_runtime.h>
 #include <curand.h>
@@ -26,7 +27,8 @@ extern "C"
 #define BLOCK 256
 
 int Player = 0;
-int device;
+int device = 0;
+pthread_mutex_t rootMutex;
 
 volatile sig_atomic_t running = 1;
 
@@ -62,7 +64,6 @@ struct ThreadData
     int* positions;
     int* results;
     curandState* states;
-    pthread_mutex_t* rootMutex;
     TreeNode* root;
     cudaStream_t stream;
 };
@@ -261,10 +262,15 @@ static TreeNode* MCTSSelectionAndExpansion(char board[TBoardSize][TBoardSize], T
             *player = *player ^ 1;
     }
     cur->games.fetch_add(BLOCK * 2, std::memory_order_relaxed);
+
     if (cur->movesN == -1)
     {
-        Expand<TRules, TBoardSize, TMaxMoves>(cur, board, *player);
+        pthread_mutex_lock(&rootMutex);
+        if (cur->movesN == -1)
+            Expand<TRules, TBoardSize, TMaxMoves>(cur, board, *player);
+        pthread_mutex_unlock(&rootMutex);
     }
+
     return cur;
 }
 
@@ -293,8 +299,6 @@ void* thread(void* data)
         memcpy(b, d->board, boardArea * sizeof(char));
         p = d->player;
         int i = 0;
-        //critical part - tree search
-        pthread_mutex_lock(d->rootMutex);
         while (cur == nullptr || cur->movesN == 0)
         {
             p = d->player;
@@ -303,12 +307,9 @@ void* thread(void* data)
             if (!running || i > 10)
             {
                 running = false;
-                pthread_mutex_unlock(d->rootMutex);
                 return NULL;
             }
         }
-        pthread_mutex_unlock(d->rootMutex);
-        //critical part end
 
         for (int i = 0; i < BLOCK; i++)
         {
@@ -353,7 +354,10 @@ void findMoveGPU(char board[TBoardSize][TBoardSize], int timeout, int player)
 {
     const int boardArea = TBoardSize * TBoardSize;
 
-    cudaGetDevice(&device);
+    cudaProfilerStart();
+    //int devcount;
+    //cudaGetDeviceCount(&devcount);
+    //cudaGetDevice(&device);
     Player = player;
     float elapsed = 0;
     cudaEvent_t start, stop;
@@ -362,14 +366,13 @@ void findMoveGPU(char board[TBoardSize][TBoardSize], int timeout, int player)
     cudaEventRecord(start, 0);
 
     //cudaFuncSetCacheConfig(MCTSSimulation, cudaFuncCachePreferL1);
-    cudaProfilerStart();
 
     TreeNode* root = new TreeNode(nullptr);
     Expand<TRules, TBoardSize, TMaxMoves>(root, board, player);
 
     pthread_t threads[THREADS];
     ThreadData<TBoardSize> tData[THREADS];
-    pthread_mutex_t rootMutex;
+
     pthread_mutex_init(&rootMutex, NULL);
 
     for (int i = 0; i < THREADS; i++)
@@ -382,7 +385,6 @@ void findMoveGPU(char board[TBoardSize][TBoardSize], int timeout, int player)
         cudaMallocManaged(&tData[i].states, BLOCK * sizeof(curandState));
         cudaMemAdvise(tData[i].states, BLOCK * sizeof(curandState), cudaMemAdviseSetPreferredLocation, device);
         tData[i].root = root;
-        tData[i].rootMutex = &rootMutex;
         tData[i].player = player;
         memcpy(tData[i].board, board, boardArea * sizeof(char));
         pthread_create(&threads[i], NULL, thread<TRules, TBoardSize, TMaxMoves>, (void*)&tData[i]);
@@ -397,7 +399,6 @@ void findMoveGPU(char board[TBoardSize][TBoardSize], int timeout, int player)
     }
 
     running = false;
-    cudaProfilerStop();
     cudaEventDestroy(start);
     cudaEventDestroy(stop);
     for (int i = 0; i < THREADS; i++)
@@ -434,6 +435,7 @@ void findMoveGPU(char board[TBoardSize][TBoardSize], int timeout, int player)
     for (int i = 0; i < root->movesN; i++)
         printf("W:%d G:%d WG:%f\n", root->children[i]->wins.load() / 2, root->children[i]->games.load() / 2, float(root->children[i]->wins.load()) / float(root->children[i]->games.load()));
     */
+    /*
     for (int i = 0; i < THREADS; i++)
     {
         cudaStreamDestroy(tData[i].stream);
@@ -441,7 +443,10 @@ void findMoveGPU(char board[TBoardSize][TBoardSize], int timeout, int player)
         cudaFree(&tData[i].boards);
         cudaFree(&tData[i].positions);
         cudaFree(&tData[i].results);
-    }
+    }*/
 
     FreeMemory(root);
+
+    cudaProfilerStop();
+    cudaDeviceReset();
 }

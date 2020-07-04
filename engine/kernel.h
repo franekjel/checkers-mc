@@ -138,7 +138,7 @@ static void Expand(TreeNode* node, char board[TBoardSize][TBoardSize], int playe
     }
     if (captures > 0)
         n = filterMoves<TMaxMoves>(moves, n);
-    node->movesN = n;
+
     node->children = new TreeNode*[n];
     node->moves = new Move[n];
     for (int i = 0; i < n; i++)
@@ -165,6 +165,7 @@ static void Expand(TreeNode* node, char board[TBoardSize][TBoardSize], int playe
             }
         }
     }
+    node->movesN = n;
 }
 
 //simulation starts in node with children, we choose one and do random game. Then backpropagate result
@@ -430,9 +431,9 @@ void findMoveGPU(char board[TBoardSize][TBoardSize], int timeout, int player)
             board[cur->moves[best][2]][cur->moves[best][3]] = 'D';
         cur = cur->children[best];
     } while (cur->position != -1);
-    /*
+
     printf("W:%d G:%d\n", root->wins.load() / 2, root->games.load() / 2);
-    for (int i = 0; i < root->movesN; i++)
+    /*for (int i = 0; i < root->movesN; i++)
         printf("W:%d G:%d WG:%f\n", root->children[i]->wins.load() / 2, root->children[i]->games.load() / 2, float(root->children[i]->wins.load()) / float(root->children[i]->games.load()));
     */
     /*

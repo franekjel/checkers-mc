@@ -52,7 +52,9 @@ struct TreeNode
         games = 0;
         children = nullptr;
         movesN = -1;
+        pthread_mutex_init(&mutex, NULL);
     }
+    pthread_mutex_t mutex;
 };
 
 template <int TBoardSize>
@@ -265,10 +267,10 @@ static TreeNode* MCTSSelectionAndExpansion(char board[TBoardSize][TBoardSize], T
 
     if (cur->movesN == -1)
     {
-        pthread_mutex_lock(&rootMutex);
+        pthread_mutex_lock(&cur->mutex);
         if (cur->movesN == -1)
             Expand<TRules, TBoardSize, TMaxMoves>(cur, board, *player);
-        pthread_mutex_unlock(&rootMutex);
+        pthread_mutex_unlock(&cur->mutex);
     }
 
     return cur;
@@ -430,9 +432,9 @@ void findMoveGPU(char board[TBoardSize][TBoardSize], int timeout, int player)
             board[cur->moves[best][2]][cur->moves[best][3]] = 'D';
         cur = cur->children[best];
     } while (cur->position != -1);
-    /*
+
     printf("W:%d G:%d\n", root->wins.load() / 2, root->games.load() / 2);
-    for (int i = 0; i < root->movesN; i++)
+    /*for (int i = 0; i < root->movesN; i++)
         printf("W:%d G:%d WG:%f\n", root->children[i]->wins.load() / 2, root->children[i]->games.load() / 2, float(root->children[i]->wins.load()) / float(root->children[i]->games.load()));
     */
     /*

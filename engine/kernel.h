@@ -28,7 +28,6 @@ extern "C"
 
 int Player = 0;
 int device = 0;
-pthread_mutex_t rootMutex;
 
 volatile sig_atomic_t running = 1;
 
@@ -140,7 +139,6 @@ static void Expand(TreeNode* node, char board[TBoardSize][TBoardSize], int playe
     }
     if (captures > 0)
         n = filterMoves<TMaxMoves>(moves, n);
-    node->movesN = n;
     node->children = new TreeNode*[n];
     node->moves = new Move[n];
     for (int i = 0; i < n; i++)
@@ -167,6 +165,7 @@ static void Expand(TreeNode* node, char board[TBoardSize][TBoardSize], int playe
             }
         }
     }
+    node->movesN = n;
 }
 
 //simulation starts in node with children, we choose one and do random game. Then backpropagate result
@@ -265,13 +264,10 @@ static TreeNode* MCTSSelectionAndExpansion(char board[TBoardSize][TBoardSize], T
     }
     cur->games.fetch_add(BLOCK * 2, std::memory_order_relaxed);
 
+    pthread_mutex_lock(&cur->mutex);
     if (cur->movesN == -1)
-    {
-        pthread_mutex_lock(&cur->mutex);
-        if (cur->movesN == -1)
-            Expand<TRules, TBoardSize, TMaxMoves>(cur, board, *player);
-        pthread_mutex_unlock(&cur->mutex);
-    }
+        Expand<TRules, TBoardSize, TMaxMoves>(cur, board, *player);
+    pthread_mutex_unlock(&cur->mutex);
 
     return cur;
 }
@@ -374,8 +370,6 @@ void findMoveGPU(char board[TBoardSize][TBoardSize], int timeout, int player)
 
     pthread_t threads[THREADS];
     ThreadData<TBoardSize> tData[THREADS];
-
-    pthread_mutex_init(&rootMutex, NULL);
 
     for (int i = 0; i < THREADS; i++)
     {
